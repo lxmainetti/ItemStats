@@ -19,8 +19,10 @@ this script is a drop-in equivalent for batch/HPC use.
 """
 
 import argparse
+import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -49,6 +51,10 @@ def build_argparser() -> argparse.ArgumentParser:
 
     p.add_argument("--data-root", default=str(REPO_ROOT / "data" / "raw"),
                     help="Root of the raw parquet data (item_list.parquet per split, embeddings output).")
+    p.add_argument("--models-root", default=str(REPO_ROOT / "models"),
+                    help="Root of trained checkpoints. embedding_meta.json is written under "
+                         "models_root/model_safe/ (alongside where the checkpoint will later "
+                         "land), not under data_root, so predict() only ever needs models_root.")
     p.add_argument("--splits", nargs="+", default=["train", "holdout", "validation"],
                     choices=list(SPLIT_PREFIXES.keys()),
                     help="Which data splits to embed.")
@@ -63,8 +69,9 @@ def build_argparser() -> argparse.ArgumentParser:
     # ---- api backend ----
     p.add_argument("--provider", choices=["openai", "google"], default="openai",
                     help="[api backend] Hosted embedding provider.")
-    p.add_argument("--dims", type=int, default=3072,
-                    help="[api backend] Output embedding dimensionality.")
+    p.add_argument("--dims", type=int, default=None,
+                    help="[api backend] Output embedding dimensionality. Left unset, resolves "
+                         "per-model (1536 for text-embedding-3-small, 3072 for -large, etc.).")
     p.add_argument("--task-type", default="SEMANTIC_SIMILARITY",
                     help="[api backend, google only] Gemini task type.")
 
@@ -92,6 +99,39 @@ def main(argv=None):
     data_root = Path(args.data_root)
     splits = [SPLIT_PREFIXES[s] for s in args.splits]
 
+    
+    # ---- Save embedding config so inference.py can re-embed new items the same way ----
+    model_safe = args.model.replace(":", "-").replace("/", "-")
+
+    meta = {
+        "model_safe": model_safe,
+        "backend": args.backend,
+        "model": args.model,
+        "saved_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if args.backend == "api":
+        meta.update({"provider": args.provider, "dims": args.dims, "task_type": args.task_type})
+    elif args.backend == "ollama":
+        meta.update({"include_instruction": not args.no_instruction})
+    elif args.backend == "hf":
+        meta.update({
+            "instruction": args.instruction,
+            "batch_size": args.batch_size,
+            "max_seq_length": args.max_seq_length,
+            "normalize": args.normalize,
+            "quantize": args.quantize,
+        })
+    # Lives under models_root, not data_root -- it's a description of *how to
+    # re-embed*, needed at predict() time right alongside the checkpoint,
+    # not the (large, training-only) raw embedding parquets in data_root.
+    meta_dir = Path(args.models_root) / model_safe
+    meta_dir.mkdir(parents=True, exist_ok=True)
+    meta_path = meta_dir / "embedding_meta.json"
+    with open(meta_path, "w") as f:
+        json.dump(meta, f, indent=2)
+    print(f"Saved embedding meta -> {meta_path}")
+
+    # ---- Embed Items ----
     for split in splits:
         label = split if split else "train"
         print(f"\n=== Split: {label} ===")
@@ -134,6 +174,8 @@ def main(argv=None):
         out_path = out_dir / f"{split}embeddings_raw.parquet"
         item_embeddings_df.write_parquet(out_path)
         print(f"Wrote {item_embeddings_df.shape} -> {out_path}")
+
+    
 
     print(f"\nDone. model_safe = {model_safe}")
     return model_safe

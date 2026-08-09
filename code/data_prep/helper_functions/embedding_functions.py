@@ -41,16 +41,12 @@ def get_embeddings(item_list, model="qwen3-embedding:8b", include_instruction=Tr
     from tqdm.auto import tqdm
 
     # Filename-safe model identifier returned to the caller
-    model_safe = model.replace(":", "-").replace("/", "")
 
     # Override the path label when running qwen3 with the instruction prefix so
     # instructed and non-instructed runs don't overwrite each other on disk
     instruct_model = ("qwen3" in model) and include_instruction
     if instruct_model:
         model_safe = "qwen3-8b-with-instruction"
-
-    os.makedirs(f"../../data/clustered_embeddings/{model_safe}", exist_ok=True)
-    embeddings_path = f"../../data/raw/{model_safe}/embeddings_raw.pkl"
 
     # Build the model input: prepend Qwen3's recommended instruction prefix if
     # we're using the instructed variant; otherwise feed the raw item text
@@ -72,18 +68,29 @@ def get_embeddings(item_list, model="qwen3-embedding:8b", include_instruction=Tr
         embeddings_list = list(tqdm(pool.map(_embed_one, inputs), total=len(inputs)))
 
 
-    return embeddings_list, model_safe
+    return embeddings_list
 
 
 # ---- Hosted-API embeddings (OpenAI / Google) ----
 
+# Known native output size per OpenAI model, used when dims isn't given
+# explicitly. text-embedding-3-small maxes out at 1536; requesting more (e.g.
+# the 3072 that's valid for -large) gets a 400 from the API.
+_OPENAI_MODEL_DIMS = {
+    "text-embedding-3-small": 1536,
+    "text-embedding-3-large": 3072,
+}
+
+
 def get_embeddings_API(item_list, model="text-embedding-3-large", provider="openai",
-                       dims=3072, task_type="SEMANTIC_SIMILARITY"):
+                       dims=None, task_type="SEMANTIC_SIMILARITY"):
     """Generate embeddings using OpenAI or Gemini.
 
     Provider is detected from ``provider``. Output dimensionality is fixed for
     older OpenAI models, tunable from ``text-embedding-3-*`` onwards, and
-    configurable on Gemini.
+    configurable on Gemini. If ``dims`` is left as ``None``, it's resolved from
+    ``_OPENAI_MODEL_DIMS`` for known OpenAI models (falls back to 3072 for
+    anything else, e.g. Gemini models, matching the previous fixed default).
 
     Returns
     -------
@@ -91,10 +98,10 @@ def get_embeddings_API(item_list, model="text-embedding-3-large", provider="open
         Embeddings keyed by item text, and the filename-safe model id.
     """
     items = list(item_list["item"])
-
     model_safe = model.replace(":", "-").replace("/", "-")
-    output_dir = "../../data/raw/"
-    os.makedirs(output_dir, exist_ok=True)
+
+    if dims is None:
+        dims = _OPENAI_MODEL_DIMS.get(model, 3072)
 
     print(f"Starting {provider} embedding for {len(items)} items...")
     embeddings_list = []
@@ -102,12 +109,17 @@ def get_embeddings_API(item_list, model="text-embedding-3-large", provider="open
     def _post_with_retry(url, *, json_body, headers=None, params=None, max_tries=3):
         last_err = None
         for _ in range(max_tries):
-            try:
-                resp = requests.post(url, json=json_body, headers=headers, params=params)
-                resp.raise_for_status()
+            resp = requests.post(url, json=json_body, headers=headers, params=params)
+            if resp.status_code < 400:
                 return resp
-            except requests.RequestException as err:
-                last_err = err
+            # 4xx = the request itself is wrong (bad model/dims/key/etc.) -- retrying
+            # identical bad input won't help, so fail immediately with the API's own
+            # error message instead of burning attempts and hiding what went wrong.
+            if resp.status_code < 500:
+                raise requests.HTTPError(
+                    f"{resp.status_code} Client Error: {resp.text}", response=resp
+                )
+            last_err = requests.HTTPError(f"{resp.status_code} Server Error: {resp.text}", response=resp)
         raise last_err
 
     # ---- OpenAI ----
@@ -275,4 +287,4 @@ def get_embeddings_HF(item_list, model="dwulff/mpnet-personality", instruction=N
     embeddings_list = [np.asarray(v, dtype=float) for v in emb]
 
     
-    return embeddings_list, model_safe
+    return embeddings_list
