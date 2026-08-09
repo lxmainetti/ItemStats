@@ -1,0 +1,11 @@
+{
+  "model_safe": "intfloat-e5-mistral-7b-instruct",
+  "backend": "hf",
+  "model": "intfloat/e5-mistral-7b-instruct",
+  "saved_at": "2026-08-09T18:49:30.026627+00:00",
+  "instruction": null,
+  "batch_size": 32,
+  "max_seq_length": 256,
+  "normalize": false,
+  "quantize": 0
+}

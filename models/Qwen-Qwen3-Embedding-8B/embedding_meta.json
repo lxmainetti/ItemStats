@@ -1,0 +1,11 @@
+{
+  "model_safe": "Qwen-Qwen3-Embedding-8B",
+  "backend": "hf",
+  "model": "Qwen/Qwen3-Embedding-8B",
+  "saved_at": "2026-08-09T18:45:47.065593+00:00",
+  "instruction": null,
+  "batch_size": 32,
+  "max_seq_length": 256,
+  "normalize": false,
+  "quantize": 0
+}

@@ -1,5 +1,5 @@
 {
-  "emb_model": "Qwen-Qwen3-Embedding-8B",
+  "emb_model": "text-embedding-3-small",
   "aux_numeric": [
     "global_sim"
   ],
@@ -12,7 +12,7 @@
   "n_features_in": 1,
   "outer_val_frac": 0.1,
   "r_clip": 0.999,
-  "sklearn_version": "1.9.0",
-  "checkpoint": "/storage/homefs/am26g599/PAIR/models/Qwen-Qwen3-Embedding-8B/dnn_siamese_cor.pt",
-  "saved_at": "2026-08-09T18:49:18.532577+00:00"
+  "sklearn_version": "1.8.0",
+  "checkpoint": "A:\\embeddings_git\\PAIR\\models\\text-embedding-3-small\\dnn_siamese_cor.pt",
+  "saved_at": "2026-08-08T16:01:41.100491+00:00"
 }

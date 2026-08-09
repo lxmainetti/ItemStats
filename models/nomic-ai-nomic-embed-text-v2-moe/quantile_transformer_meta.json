@@ -1,5 +1,5 @@
 {
-  "emb_model": "Qwen-Qwen3-Embedding-8B",
+  "emb_model": "nomic-ai-nomic-embed-text-v2-moe",
   "aux_numeric": [
     "global_sim"
   ],
@@ -13,6 +13,6 @@
   "outer_val_frac": 0.1,
   "r_clip": 0.999,
   "sklearn_version": "1.9.0",
-  "checkpoint": "/storage/homefs/am26g599/PAIR/models/Qwen-Qwen3-Embedding-8B/dnn_siamese_cor.pt",
-  "saved_at": "2026-08-09T18:49:18.532577+00:00"
+  "checkpoint": "../../models/nomic-ai-nomic-embed-text-v2-moe/dnn_siamese_cor.pt",
+  "saved_at": "2026-08-07T12:28:34.350651+00:00"
 }

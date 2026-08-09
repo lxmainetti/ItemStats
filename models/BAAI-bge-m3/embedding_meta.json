@@ -1,0 +1,11 @@
+{
+  "model_safe": "BAAI-bge-m3",
+  "backend": "hf",
+  "model": "BAAI/bge-m3",
+  "saved_at": "2026-08-09T13:19:01.558765+00:00",
+  "instruction": null,
+  "batch_size": 32,
+  "max_seq_length": 256,
+  "normalize": false,
+  "quantize": 0
+}

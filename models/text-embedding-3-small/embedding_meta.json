@@ -1,0 +1,9 @@
+{
+  "model_safe": "text-embedding-3-small",
+  "backend": "api",
+  "model": "text-embedding-3-small",
+  "saved_at": "2026-08-08T15:59:33.657344+00:00",
+  "provider": "openai",
+  "dims": null,
+  "task_type": "SEMANTIC_SIMILARITY"
+}
