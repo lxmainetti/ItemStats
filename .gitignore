@@ -16,3 +16,9 @@ adhd.json
 *.db
 *.pyc
 *.pkl
+__pycache__/
+*.egg-info/
+build/
+dist/
+.piptmp/
+*.svg

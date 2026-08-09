@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pair-psychometrics"
+version = "0.1.0"
+description = "PAIR: Predicting Associations of Inter-item Relationships -- Siamese DNN for predicting pairwise item correlations from text embeddings. Inference only, reads checkpoints from a PAIR repo's data/raw + models folders; see the full repo on GitHub for training."
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "polars",
+    "numpy",
+    "scikit-learn",
+    "joblib",
+    "requests",
+    "sentence-transformers",
+    "transformers",
+    "ollama",
+    "tqdm",
+]
+
+[tool.setuptools]
+package-dir = { "pair" = "code" }
+# "pair" is the only real Python package here (code/__init__.py). siamese_model.py
+# and embedding_functions.py are bundled as plain data files, not subpackages --
+# inference.py finds them via sys.path, so they don't need __init__.py or a
+# formal package declaration. This also keeps model_training.py/model_validation.py/
+# embed_items.py/train.py (repo-only, need the training data pipeline) out of the wheel.
+# No checkpoint weights ship here -- predict() reads them straight from a PAIR
+# repo's data/raw/ + models/ folders (default: wherever this package's own
+# source lives, i.e. the repo it was pip install -e'd from).
+packages = ["pair"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+pair = [
+    "modelling/siamese_model.py",
+    "data_prep/helper_functions/embedding_functions.py",
+]
