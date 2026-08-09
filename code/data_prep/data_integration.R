@@ -21,6 +21,7 @@ options(vroom.altrep = FALSE)
 # Global accumulators (filled by intercorrelations() / append_item_list())
 dat_cors <- tibble()
 item_list <- tibble()
+splithalf_cors <- tibble()   # filled by split_half_correlations() -- holdout/validation only
 
 # Standardized paths used by the per-scale blocks
 cb <- "/codebook.txt"
@@ -64,6 +65,35 @@ intercorrelations <- function(data, dic_col, testing = FALSE, scale_name, scale_
     bind_cors(cor_items)
   else
     cor_items
+}
+
+# Splits `data` into two random respondent halves, computes item-pair
+# correlations independently within each half (via intercorrelations with
+# testing = TRUE, so this never touches dat_cors/item_list), and joins the
+# two resulting correlation sets into one row per pair: r_half1, r_half2,
+# plus each half's respondent N. This is the empirical noise-ceiling input:
+# correlating r_half1 against r_half2 downstream tells you how reproducible
+# the "ground truth" correlation itself is at half the sample's size, which
+# (Spearman-Brown corrected) upper-bounds what any predictive model can
+# achieve against the full-sample target.
+split_half_correlations <- function(data, dic_col, scale_name, scale_source, seed = 42){
+  set.seed(seed)
+  n <- nrow(data)
+  idx <- sample(seq_len(n))
+  half1_idx <- idx[seq_len(floor(n / 2))]
+  half2_idx <- idx[(floor(n / 2) + 1):n]
+
+  h1 <- intercorrelations(data[half1_idx, ], dic_col, testing = TRUE,
+                           scale_name = scale_name, scale_source = scale_source) %>%
+    rename(r_half1 = r)
+  h2 <- intercorrelations(data[half2_idx, ], dic_col, testing = TRUE,
+                           scale_name = scale_name, scale_source = scale_source) %>%
+    rename(r_half2 = r)
+
+  sh <- inner_join(h1, h2, by = c("Parameter1", "Parameter2")) %>%
+    mutate(n_half1 = length(half1_idx), n_half2 = length(half2_idx))
+
+  splithalf_cors <<- bind_rows(splithalf_cors, sh)
 }
 
 # Map an arbitrary numeric column to a 1-10 scale (used before computing M/SD
@@ -134,6 +164,7 @@ shorten <- function(data){
 reset_accumulators <- function(){
   dat_cors <<- tibble()
   item_list <<- tibble()
+  splithalf_cors <<- tibble()
 }
 
 # Write current accumulators to disk as parquet with the given prefix
@@ -145,6 +176,17 @@ export_accumulators <- function(prefix = ""){
   arrow::write_parquet(
     item_list %>% distinct(item, .keep_all = TRUE),
     paste0("../../data/raw/", prefix, "item_list.parquet")
+  )
+}
+
+# Write the split-half correlation table (if any was computed for this pass)
+# to its own parquet, so downstream notebooks can estimate a noise ceiling
+# without re-deriving it from raw respondent data themselves.
+export_splithalf <- function(prefix = ""){
+  if (nrow(splithalf_cors) == 0) return(invisible(NULL))
+  arrow::write_parquet(
+    splithalf_cors %>% distinct(Parameter1, Parameter2, .keep_all = TRUE),
+    paste0("../../data/raw/", prefix, "item_correlations_splithalf.parquet")
   )
 }
 
@@ -416,7 +458,12 @@ bainbridge_holdout_items <- unname(labels_bb$s2[colnames(bainbridge_holdout)]) %
   str_to_sentence()
 intercorrelations(bainbridge_holdout, bainbridge_holdout_items, scale_name = "Bainbridge_S2", scale_source = "OSF")
 
+# Empirical noise-ceiling input: independent item-pair correlations from two
+# random respondent halves of the same sample (see split_half_correlations()).
+split_half_correlations(bainbridge_holdout, bainbridge_holdout_items, scale_name = "Bainbridge_S2", scale_source = "OSF")
+
 export_accumulators(prefix = "holdout_")
+export_splithalf(prefix = "holdout_")
 
 # ===========================================================================
 # VALIDATION SET (SurveyBot validation study - completely separate scales)
@@ -441,4 +488,9 @@ sb_val_items <- str_remove(sb_labels[keep], "^.*: ")  # strip prefix on survivor
 sb_val <- sb_val %>% zap_formats() %>% zap_label() %>% zap_labels()
 intercorrelations(sb_val, sb_val_items, scale_name = "Hommel_Arslan_val", scale_source = "OSF")
 
+# Empirical noise-ceiling input: independent item-pair correlations from two
+# random respondent halves of the same sample (see split_half_correlations()).
+split_half_correlations(sb_val, sb_val_items, scale_name = "Hommel_Arslan_val", scale_source = "OSF")
+
 export_accumulators(prefix = "validation_")
+export_splithalf(prefix = "validation_")
