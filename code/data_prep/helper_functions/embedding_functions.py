@@ -41,6 +41,7 @@ def get_embeddings(item_list, model="qwen3-embedding:8b", include_instruction=Tr
     from tqdm.auto import tqdm
 
     # Filename-safe model identifier returned to the caller
+    model_safe = model.replace(":", "-").replace("/", "")
 
     # Override the path label when running qwen3 with the instruction prefix so
     # instructed and non-instructed runs don't overwrite each other on disk
@@ -67,8 +68,7 @@ def get_embeddings(item_list, model="qwen3-embedding:8b", include_instruction=Tr
     with ThreadPoolExecutor(max_workers=16) as pool:
         embeddings_list = list(tqdm(pool.map(_embed_one, inputs), total=len(inputs)))
 
-
-    return embeddings_list
+    return embeddings_list, model_safe
 
 
 # ---- Hosted-API embeddings (OpenAI / Google) ----
@@ -286,5 +286,4 @@ def get_embeddings_HF(item_list, model="dwulff/mpnet-personality", instruction=N
     emb = st.encode(texts, **encode_kwargs)
     embeddings_list = [np.asarray(v, dtype=float) for v in emb]
 
-    
-    return embeddings_list
+    return embeddings_list, model_safe
