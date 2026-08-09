@@ -35,7 +35,7 @@ class SiameseDNN(nn.Module):
 
         # Interaction: concat[h1, h2, h1*h2, |h1-h2|]. h1*h2 and |h1-h2| are
         # symmetric in pair ordering, which matches the symmetry of Pearson r.
-        head_in = 4 * e + aux_dim
+        head_in = 3 * e + aux_dim
 
         layers, prev = [], head_in
         for h in head_dims:
@@ -54,7 +54,7 @@ class SiameseDNN(nn.Module):
     def forward(self, e1, e2, aux):
         h1 = self.encoder(e1)
         h2 = self.encoder(e2)
-        inter = torch.cat([h1, h2, h1 * h2, (h1 - h2).abs()], dim=-1)
+        inter = torch.cat([h1 + h2, h1 * h2, (h1 - h2).abs()], dim=-1)
         x = torch.cat([inter, aux], dim=-1)
         z = self.out(self.head(x)).squeeze(-1)
         if self.use_skip:
