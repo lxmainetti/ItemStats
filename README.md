@@ -100,14 +100,20 @@ model_safe = train("intfloat/e5-mistral-7b-instruct", skip_embed=True) # reuse e
 
 ## 📊 Data sources
 
-Built on the principles of Open Science. The training pool aggregates **~32 published psychometric scales** from open-access repositories; the full scale-by-scale list with abbreviations and citations lives in [`scale_sources.md`](scale_sources.md). By provenance:
+Built on the principles of Open Science. The training pool aggregates **55 published psychometric instruments** (2,843 unique items, 432,214 pairwise correlations) from open-access repositories; the full scale-by-scale list with abbreviations and citations lives in [`scale_sources.md`](scale_sources.md). By provenance:
 
-- **`psychTools` R package** (5 scales): Eysenck Personality Inventory (EPI), Big Five Inventory (BFI), Motivational State Questionnaire (MSQ), SAPA Personality Inventory (SPI), and the Athenstaedt Gender-Role Self-Concept scale.
-- **OpenPsychometrics.org** (18 scales): HSQ, Taylor Manifest Anxiety, HEXACO, RIASEC, Consideration of Future Consequences, DASS, ECR, Empathizing/Systemizing Quotient, GCBS, KIMS, MACH-IV, MGKT, NPAS, Rosenberg Self-Esteem, RWAS, Sexual Compulsivity, AMBI, and the 16PF.
-- **OSF & open research repositories** (8 scales): PID-5, SCL-90-R, Psychological Strain Scales, the Comprehensive Autistic Inventory / ASRS (plus an Adult ADHD self-report), C-PETS, EPTEPS, the Vanity scale, and a Self-Efficacy Fragility scale from an own study deposited to OSF.
-- **Journal supplement (DOI)** (1 scale): General Attitudes towards AI Scale (GAAIS).
+- **`psychTools` R package** (4 instruments): Eysenck Personality Inventory (EPI), Big Five Inventory (BFI), Motivational State Questionnaire (MSQ), SAPA Personality Inventory (SPI).
+- **OpenPsychometrics.org** (20 instruments): HSQ, Taylor Manifest Anxiety, HEXACO, RIASEC, Consideration of Future Consequences, DASS, ECR, Empathizing/Systemizing Quotient, GCBS, KIMS, MACH-IV, NPAS, Rosenberg Self-Esteem, RWAS, Sexual Compulsivity, AMBI, 16PF, MSSCQ, HSNS+DD, and the Short Dark Triad.
+- **SAPA personality project** (1 instrument): the IPIP 696-item public release.
+- **OSF & open research repositories** (31 instruments): PID-5, SCL-90-R, Psychological Strain Scales, the Comprehensive Autistic Inventory / ASRS (plus an Adult ADHD self-report), C-PETS, EPTEPS, the Vanity scale, a Self-Efficacy Fragility scale from an own study — plus the **23 instruments** administered in wave 1 of the Bainbridge personality mega-study.
+- **Journal supplement (DOI)** (1 instrument): General Attitudes towards AI Scale (GAAIS).
 
-The two out-of-training splits come from separate studies kept fully disjoint from the training scales: the **Bainbridge** personality mega-study (holdout — item-disjoint, overlapping scale families) and a **SurveyBot** study of entirely new scales (validation — AAID + BFI-10).
+Two instruments (Rosenberg Self-Esteem, Short Dark Triad) enter the pool from two sources with differing item wordings, so the 55 instruments correspond to 57 scale-by-source entries.
+
+The two out-of-training splits:
+
+- **Item holdout** (hyperparameter tuning): wave 2 of the **Bainbridge** mega-study — 21 instruments, 418 items, 87,153 pairs. Item-disjoint from training, but 9 of its 21 instruments also appear in the training pool via wave 1, so scale families overlap.
+- **Scale generalization** (out-of-sample estimate): the **SurveyBot3000** validation study — 21 instruments, 260 items, 33,670 pairs, with zero item overlap with the training pool.
 
 ## 🧪 Retired stages
 
