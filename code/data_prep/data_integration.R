@@ -35,9 +35,14 @@ bind_cors <- function(cor_items){
   dat_cors <<- dat_cors %>% bind_rows(cor_items)
 }
 
-# Computes per-item descriptives (mean/sd on a rescaled 0-10 scale) and binds
-# them onto the global item list together with the item wording
+# Binds the item wordings onto the global item list together with their scale
+# membership. `scale_name` may be a single string (one instrument per call, the
+# usual case) OR a character vector with one entry per item. The vector form is
+# what the multi-scale batteries below (Bainbridge s1/s2, SurveyBot validation
+# study) use, so that every item carries the instrument it actually came from
+# rather than a single lumped study label.
 append_item_list <- function(data, item_wordings, scale_name, scale_source) {
+  stopifnot(length(scale_name) %in% c(1L, nrow(item_wordings)))
   new_rows <- item_wordings %>% mutate(scale_name = scale_name,
                                        scale_source = scale_source)
   item_list <<- bind_rows(item_list, new_rows)
@@ -47,12 +52,15 @@ append_item_list <- function(data, item_wordings, scale_name, scale_source) {
 # pairwise Pearson r (long format, upper-triangle only) and pushes both
 # correlations and item-list metadata into the global accumulators.
 # testing = TRUE returns the correlation tibble without mutating globals.
+# `scale_name` is either length 1 or one entry per item (see append_item_list()).
 intercorrelations <- function(data, dic_col, testing = FALSE, scale_name, scale_source){
   dat <- data
   colnames(dat) <- dic_col
-  
+
+  stopifnot(length(scale_name) %in% c(1L, length(dic_col)))
+
   dic_col <- dic_col %>% str_replace(., "'''", "'")
-  
+
   if(!testing)
     append_item_list(data, dic_col %>% as_tibble() %>% rename(item = value), scale_name=scale_name, scale_source = scale_source)
 
@@ -154,6 +162,130 @@ extract_riasec_items <- function(path) {
   names(item_text) <- item_ids
   return(item_text)
 }
+
+# ---- Multi-scale battery -> per-item scale membership ----
+
+# The Bainbridge mega-study waves and the SurveyBot validation study are not
+# single instruments but batteries of many published scales administered in one
+# session. Labelling all of their items with one study-level tag would make the
+# scale counts in the manuscript wrong and would prevent any scale-level
+# analysis (inter-scale correlations, Cronbach's alpha, factor recovery) on
+# these sets. The two helpers below recover the instrument each item belongs to.
+
+# Bainbridge: the instrument is encoded in the variable-name prefix
+# ("dtmach_1" -> "dtmach" -> SD3). Subscale prefixes of the same instrument map
+# onto one name, so granularity matches the rest of the pool (one row per
+# published instrument, not per facet).
+scale_from_prefix <- function(col_names, lookup){
+  prefixes <- str_extract(col_names, "^[^_]+")
+  unmapped <- setdiff(unique(prefixes), names(lookup))
+  if (length(unmapped) > 0)
+    stop("Unmapped variable prefixes: ", paste(unmapped, collapse = ", "))
+  unname(lookup[prefixes])
+}
+
+# SurveyBot validation study: variable-name prefixes are NOT unique there (e.g.
+# "FRI_.." appears in both the Moral Foundations Questionnaire and the
+# Authoritarianism Short Scale), so the instrument is taken from the SPSS
+# variable label instead, which is of the form "<Scale name>: <item text>".
+# Non-ASCII characters in the scale name are normalised before lookup so the
+# mapping does not depend on the file's encoding.
+scale_from_label <- function(labels, lookup){
+  prefixes <- str_remove(labels, ":.*$") %>%
+    str_replace_all("[^ -~]", "-") %>%
+    str_trim()
+  unmapped <- setdiff(unique(prefixes), names(lookup))
+  if (length(unmapped) > 0)
+    stop("Unmapped scale labels: ", paste(unmapped, collapse = " | "))
+  unname(lookup[prefixes])
+}
+
+# Bainbridge wave 1 (training pool): 27 variable prefixes -> 23 instruments.
+bainbridge_s1_scales <- c(
+  bfi    = "BFI2",       # Big Five Inventory-2
+  ip     = "IPIPNEO120", # IPIP-NEO-120
+  aggr   = "BPAQ_SF",    # Buss-Perry Aggression Questionnaire, short form
+  ambig  = "MSTAT_II",   # Multiple Stimulus Types Ambiguity Tolerance-II
+  curi   = "CEI_II",     # Curiosity and Exploration Inventory-II
+  doc    = "DCS",        # Desirability of Control Scale
+  dogma  = "DOG",        # Altemeyer Dogmatism Scale
+  dtmach = "SD3",        # Short Dark Triad - Machiavellianism
+  dtnarc = "SD3",        # Short Dark Triad - Narcissism
+  dtpsyc = "SD3",        # Short Dark Triad - Psychopathy
+  empa   = "TEQ",        # Toronto Empathy Questionnaire
+  flour  = "FS",         # Flourishing Scale
+  gratit = "GQ6",        # Gratitude Questionnaire-6
+  grit   = "GRIT",       # Grit Scale
+  hope   = "AHS",        # Adult Hope Scale
+  iuncr  = "IUS12",      # Intolerance of Uncertainty Scale, short form
+  lone   = "DJGLS",      # De Jong Gierveld Loneliness Scale
+  nfs    = "PNS",        # Personal Need for Structure
+  opt    = "LOTR",       # Life Orientation Test-Revised
+  satwl  = "SWLS",       # Satisfaction With Life Scale
+  scpri  = "SCSR",       # Self-Consciousness Scale-Revised - private
+  scpub  = "SCSR",       # Self-Consciousness Scale-Revised - public
+  scsanx = "SCSR",       # Self-Consciousness Scale-Revised - social anxiety
+  scont  = "BSCS",       # Brief Self-Control Scale
+  seff   = "NGSE",       # New General Self-Efficacy Scale
+  sest   = "RSE",        # Rosenberg Self-Esteem Scale
+  vital  = "SVS"         # Subjective Vitality Scale
+)
+
+# Bainbridge wave 2 (item holdout set): 26 variable prefixes -> 21 instruments.
+bainbridge_s2_scales <- c(
+  bfi    = "BFI2",       # Big Five Inventory-2
+  ip     = "IPIPNEO120", # IPIP-NEO-120
+  aggr   = "BPAQ_SF",    # Buss-Perry Aggression Questionnaire, short form
+  bas    = "BISBAS",     # BIS/BAS Scales - behavioural activation
+  bis    = "BISBAS",     # BIS/BAS Scales - behavioural inhibition
+  erreap = "ERQ",        # Emotion Regulation Questionnaire - reappraisal
+  ersup  = "ERQ",        # Emotion Regulation Questionnaire - suppression
+  empec  = "IRI",        # Interpersonal Reactivity Index - empathic concern
+  empf   = "IRI",        # Interpersonal Reactivity Index - fantasy
+  emppd  = "IRI",        # Interpersonal Reactivity Index - personal distress
+  emppt  = "IRI",        # Interpersonal Reactivity Index - perspective taking
+  grit   = "GRIT",       # Grit Scale
+  hope   = "AHS",        # Adult Hope Scale
+  imp    = "BIS15",      # Barratt Impulsiveness Scale, 15-item short form
+  mndfn  = "MAAS",       # Mindful Attention Awareness Scale
+  nfc    = "NCS18",      # Need for Cognition Scale-18
+  opt    = "LOTR",       # Life Orientation Test-Revised
+  pain   = "PCS",        # Pain Catastrophizing Scale
+  pwb    = "SPWB",       # Ryff Scales of Psychological Well-Being
+  satwl  = "SWLS",       # Satisfaction With Life Scale
+  scomp  = "SCSSF",      # Self-Compassion Scale, short form
+  scont  = "BSCS",       # Brief Self-Control Scale
+  sest   = "RSE",        # Rosenberg Self-Esteem Scale
+  smast  = "PMS",        # Pearlin Mastery Scale
+  ss     = "MSPSS",      # Multidimensional Scale of Perceived Social Support
+  worry  = "PSWQ"        # Penn State Worry Questionnaire
+)
+
+# SurveyBot validation study (scale-generalization set): 21 instruments, keyed
+# by the scale name carried in the SPSS variable label.
+surveybot_val_scales <- c(
+  "Attitudes Toward AI in Defense Scale"                = "AAID",
+  "Positive and Negative Affect Schedule"               = "PANAS",
+  "Oldenburg Burnout Inventory"                         = "OLBI",
+  "Utrecht Work Engagement Scale"                       = "UWES9",
+  "Perth Alexithymia Questionnaire"                     = "PAQ",
+  "Perceived Stress Scale"                              = "PSS14",
+  "New Ecological Paradigm Scale"                       = "NEPS",
+  "UCLA Loneliness Scale"                               = "ULS8",
+  "Fear of COVID-19 Scale"                              = "FCV19S",
+  "Disgust Avoidance Questionnaire"                     = "DAQ",
+  "Work Gratitude Scale"                                = "WGS",
+  "Center for Epidemiological Studies Depression Scale" = "CESD",
+  "HEXACO-60"                                           = "HEXACO60",
+  "Obsessive-Compulsive Inventory"                      = "OCIR",
+  "Perseverative Thinking Questionnaire"                = "PTQ",
+  "Revised Adult Attachment Scale"                      = "RAAS",
+  "Authoritarianism Short Scale"                        = "KSA3",
+  "Survey Attitude Scale"                               = "SAS",
+  "Moral Foundations Questionnaire"                     = "MFQ",
+  "Chronotype Questionnaire"                            = "CQ",
+  "Big Five Inventory (BFI-10)"                         = "BFI10"
+)
 
 # Subsample large datasets to keep the correlation step tractable
 shorten <- function(data){
@@ -297,7 +429,7 @@ intercorrelations(MACH, MACH_items, scale_name = "MACH", scale_source = "OpenPsy
 #   mutate(across(everything(), ~ nchar(.x) / 2))
 # intercorrelations(MGKT, MGKT_items, scale_name = "MGKT", scale_source = "OpenPsychometrics")
 
-# Narcissistic Personality Adjective Checklist
+# Nerdy Personality Attributes Scale
 NPAS_items <- extract_items_robust(paste0(path_to_scales, "NPAS", cb))
 NPAS <- read_tsv(paste0(path_to_scales, "NPAS", data_path)) %>%
   select(starts_with("Q")) %>% shorten()
@@ -315,7 +447,7 @@ RWAS <- read_csv(paste0(path_to_scales, "RWAS", data_path)) %>%
   select(starts_with("Q")) %>% shorten()
 intercorrelations(RWAS, RWAS_items, scale_name = "RWAS", scale_source = "OpenPsychometrics")
 
-# Self-Compassion Scale
+# Sexual Compulsivity Scale
 SCS_items <- extract_items_robust(paste0(path_to_scales, "SCS", cb))
 SCS <- read_csv(paste0(path_to_scales, "SCS", data_path)) %>%
   select(starts_with("Q")) %>% shorten()
@@ -385,7 +517,7 @@ C_PETS_items <- extract_items_robust(paste0(path_to_scales, "C-PETS", cb))
 C_PETS <- read_csv(paste0(path_to_scales, "C-PETS", data_path), skip = 2) %>% select(-c(1:4))
 intercorrelations(C_PETS, C_PETS_items, scale_name = "CPETS", scale_source = "OSF")
 
-# Emotion Processes in Therapy-Engaged Patient Scale
+# Educational Physical Technology Engagement and Performance Scale
 EPTEPS_items <- extract_items_robust(paste0(path_to_scales, "EPTEPS", cb))
 EPTEPS <- read_csv(paste0(path_to_scales, "EPTEPS", data_path)) %>% select(UE1:MO5)
 intercorrelations(EPTEPS, EPTEPS_items, scale_name = "EPTEPS", scale_source = "OSF")
@@ -398,31 +530,38 @@ Vanity_Scale <- read_sav(paste0(path_to_scales, "Vanity_Scale/data.sav")) %>%
   mutate(across(ends_with("R"), ~ 6 - .x))
 intercorrelations(Vanity_Scale, Vanity_Scale_items, scale_name = "VanityScale", scale_source = "OSF")
 
-# Multidimensional Self-Concept Questionnaire
+# Multidimensional Sexual Self-Concept Questionnaire
+# (OpenPsychometrics raw-data repository, not OSF -- fixed to match Table A1)
 MSSCQ_items <- extract_items_robust(paste0(path_to_scales, "MSSCQ", cb))
 MSSCQ <- read_tsv(paste0(path_to_scales, "MSSCQ", data_path)) %>% select(starts_with("Q"))
-intercorrelations(MSSCQ, MSSCQ_items, scale_name = "MSSCQ", scale_source = "OSF")
+intercorrelations(MSSCQ, MSSCQ_items, scale_name = "MSSCQ", scale_source = "OpenPsychometrics")
 
-# Hypersensitive Narcissism + Dirty Dozen
+# Hypersensitive Narcissism Scale + Dirty Dozen
+# (OpenPsychometrics raw-data repository, not OSF -- fixed to match Table A1)
 HSNS_DD_items <- extract_items_robust(paste0(path_to_scales, "HSNS+DD", cb))
 HSNS_DD <- read_tsv(paste0(path_to_scales, "HSNS+DD", data_path)) %>%
   select(starts_with("H"), starts_with("D"))
-intercorrelations(HSNS_DD, HSNS_DD_items, scale_name = "HSNS_DD", scale_source = "OSF")
+intercorrelations(HSNS_DD, HSNS_DD_items, scale_name = "HSNS_DD", scale_source = "OpenPsychometrics")
 
 # Short Dark Triad
+# (OpenPsychometrics raw-data repository, not OSF -- fixed to match Table A1)
 SD3_items <- extract_items_robust(paste0(path_to_scales, "SD3", cb))
 SD3 <- read_tsv(paste0(path_to_scales, "SD3", data_path)) %>% select(-country, -source)
-intercorrelations(SD3, SD3_items, scale_name = "SD3", scale_source = "OSF")
+intercorrelations(SD3, SD3_items, scale_name = "SD3", scale_source = "OpenPsychometrics")
 
 # Bainbridge mega-study s1 (item texts via the authors' RDS label dict, with
-# "I am someone who - X" / "I - X" prefixes flattened into proper sentences)
+# "I am someone who - X" / "I - X" prefixes flattened into proper sentences).
+# This wave is a battery of 23 published instruments, so scale membership is
+# recovered per item from the variable-name prefixes rather than tagging the
+# whole wave with one study-level label.
 labels_bb <- read_rds(paste0(path_to_scales, "Bainbridge/label.rds"))
 bainbridge <- read_csv(paste0(path_to_scales, "Bainbridge", data_path)) %>%
   select(-c(1, ac_1:Consent_T_Click.Count))
 bainbridge_items <- unname(labels_bb$s1[colnames(bainbridge)]) %>%
   str_replace(" - ", " ") %>%
   str_to_sentence()
-intercorrelations(bainbridge, bainbridge_items, scale_name = "Bainbridge_S1", scale_source = "OSF")
+bainbridge_scales <- scale_from_prefix(colnames(bainbridge), bainbridge_s1_scales)
+intercorrelations(bainbridge, bainbridge_items, scale_name = bainbridge_scales, scale_source = "OSF")
 
 # SAPA 696-item public release
 sapa_items <- read_csv(paste0(path_to_scales, "SAPA/iteminfo696.csv"),
@@ -456,11 +595,15 @@ stopifnot(all(colnames(bainbridge_holdout) %in% names(labels_bb$s2)))
 bainbridge_holdout_items <- unname(labels_bb$s2[colnames(bainbridge_holdout)]) %>%
   str_replace(" - ", " ") %>%
   str_to_sentence()
-intercorrelations(bainbridge_holdout, bainbridge_holdout_items, scale_name = "Bainbridge_S2", scale_source = "OSF")
+# Wave 2 is a battery of 21 published instruments (see bainbridge_s2_scales).
+bainbridge_holdout_scales <- scale_from_prefix(colnames(bainbridge_holdout), bainbridge_s2_scales)
+intercorrelations(bainbridge_holdout, bainbridge_holdout_items,
+                  scale_name = bainbridge_holdout_scales, scale_source = "OSF")
 
 # Empirical noise-ceiling input: independent item-pair correlations from two
 # random respondent halves of the same sample (see split_half_correlations()).
-split_half_correlations(bainbridge_holdout, bainbridge_holdout_items, scale_name = "Bainbridge_S2", scale_source = "OSF")
+split_half_correlations(bainbridge_holdout, bainbridge_holdout_items,
+                        scale_name = bainbridge_holdout_scales, scale_source = "OSF")
 
 export_accumulators(prefix = "holdout_")
 export_splithalf(prefix = "holdout_")
@@ -474,7 +617,7 @@ reset_accumulators()
 # Item wordings live in SPSS variable labels; pattern strips the "TraitX: " prefix
 sb_val <- read_rds(paste0(path_to_scales, "surveybot_val_study/data.rds")) %>%
   as_tibble() %>%
-  select(AAID_01:BFI10)
+  select(AAID_01:CQ_16)
 
 sb_labels <- map_chr(sb_val, ~ attr(.x, "label") %||% NA_character_)
 
@@ -485,12 +628,16 @@ keep <- !is.na(sb_labels) &
 sb_val       <- sb_val[keep]                          # same columns dropped
 sb_val_items <- str_remove(sb_labels[keep], "^.*: ")  # strip prefix on survivors
 
+# The stripped prefix is the instrument name; recover it as the per-item scale
+# label so the 21 validation instruments are not collapsed into one study tag.
+sb_val_scales <- scale_from_label(sb_labels[keep], surveybot_val_scales)
+
 sb_val <- sb_val %>% zap_formats() %>% zap_label() %>% zap_labels()
-intercorrelations(sb_val, sb_val_items, scale_name = "Hommel_Arslan_val", scale_source = "OSF")
+intercorrelations(sb_val, sb_val_items, scale_name = sb_val_scales, scale_source = "OSF")
 
 # Empirical noise-ceiling input: independent item-pair correlations from two
 # random respondent halves of the same sample (see split_half_correlations()).
-split_half_correlations(sb_val, sb_val_items, scale_name = "Hommel_Arslan_val", scale_source = "OSF")
+split_half_correlations(sb_val, sb_val_items, scale_name = sb_val_scales, scale_source = "OSF")
 
 export_accumulators(prefix = "validation_")
 export_splithalf(prefix = "validation_")
