@@ -1,0 +1,9 @@
+{
+  "model_safe": "gemini-embedding-2",
+  "backend": "api",
+  "model": "gemini-embedding-2",
+  "saved_at": "2026-08-09T19:41:24.535578+00:00",
+  "provider": "google",
+  "dims": null,
+  "task_type": "SEMANTIC_SIMILARITY"
+}

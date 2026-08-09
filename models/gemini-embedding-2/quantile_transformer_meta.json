@@ -1,0 +1,18 @@
+{
+  "emb_model": "gemini-embedding-2",
+  "aux_numeric": [
+    "global_sim"
+  ],
+  "aux_dim": 1,
+  "global_sim": "raw cosine similarity over all embedding dims",
+  "output_distribution": "normal",
+  "n_quantiles": 1000,
+  "subsample": 200000,
+  "random_state": 42,
+  "n_features_in": 1,
+  "outer_val_frac": 0.1,
+  "r_clip": 0.999,
+  "sklearn_version": "1.8.0",
+  "checkpoint": "A:\\embeddings_git\\PAIR\\models\\gemini-embedding-2\\dnn_siamese_cor.pt",
+  "saved_at": "2026-08-09T19:42:47.095722+00:00"
+}
